@@ -207,7 +207,7 @@ jobs:
           fileId: ${{ event.fileId }}
 
       - name: Predict Segmentation
-        action: datatorch/dextr@latest
+        action: aoxolotl/dextr_server@fixTorch
         inputs:
           imagePath: ${{ input.path }}
           points: ${{ event.flowData.points }}

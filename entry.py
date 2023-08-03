@@ -37,6 +37,25 @@ simplify = get_input("simplify")
 CONTAINER_NAME = "datatorch-dextr-action"
 
 
+def return_container_status(container_name: str) -> str:
+    """Get the status of a container by it's name
+
+    :param container_name: the name of the container
+    :return: string
+    """
+    # Connect to Docker using the default socket or the configuration
+    # in your environment
+    docker_client = docker.from_env()
+
+    try:
+        container = docker_client.containers.get(container_name)
+    except docker.errors.NotFound as exc:
+        print(f"Check container name!\n{exc.explanation}")
+        return "EEXIST"
+    else:
+        container_state = container.attrs["State"]
+        return container_state["Status"]
+
 def valid_image_path():
     if not image_path.startswith(agent_dir):
         print(f"Directory must be inside the agent folder ({agent_dir}).")
@@ -49,17 +68,23 @@ def valid_image_path():
 
 def start_server(port: int):
     docker_client = docker.from_env()
-    print(f"Creating DEXTR container on port {port}.")
-    print(f"Downloading {image} docker image. This may take a few mins.", flush=True)
-    container = docker_client.containers.run(
-        image,
-        detach=True,
-        ports={"8000/tcp": port},
-        restart_policy={"Name": "always"},
-        volumes={agent_dir: {"bind": "/agent", "mode": "rw"}},
-    )
-    if isinstance(container, Model):
-        print(f"Created DEXTR Container ({container.short_id}).")
+    # only start server if it image is not up already exist
+    if return_container_status(CONTAINER_NAME) != "running":
+        print(f"Creating DEXTR container on port {port}.")
+        print(f"Downloading {image} docker image. This may take a few mins.", flush=True)
+        container = docker_client.containers.run(
+            image,
+            detach=True,
+            ports={"8000/tcp": port},
+            restart_policy={"Name": "always"},
+            volumes={agent_dir: {"bind": "/agent", "mode": "rw"}},
+            name=CONTAINER_NAME
+        )
+        if isinstance(container, Model):
+            print(f"Created DEXTR Container ({container.short_id}).")
+    else:
+        print(f"Container {CONTAINER_NAME} already running")
+        print(f"Sleeping to wait for server bring up")
 
 
 def call_dextr(path: str, points: List[Point], address: str) -> List[List[Point]]:
@@ -102,6 +127,9 @@ def combine_segmentations(
 
 def send_request():
     attempts = 0
+
+    start_server(address.port or 80)
+    time.sleep(30)
 
     while True:
         try:
